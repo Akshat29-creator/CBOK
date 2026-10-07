@@ -56,6 +56,9 @@ export const TrainingDashboard: React.FC<TrainingDashboardProps> = ({
   const trainingRef = useRef<boolean>(false);
   trainingRef.current = isTraining;
 
+  const epochRef = useRef<number>(currentEpoch);
+  epochRef.current = currentEpoch;
+
   // Single step training function
   const runSingleStep = (pairIdx: number) => {
     if (pairs.length === 0) return;
@@ -113,34 +116,38 @@ export const TrainingDashboard: React.FC<TrainingDashboardProps> = ({
     return avgLoss;
   };
 
-  // Automated Training Loop Effect
+  // Automated Training Loop Effect - decoupled from currentEpoch to prevent infinite re-render loop
   useEffect(() => {
+    if (!isTraining) return;
+
     let timeoutId: NodeJS.Timeout;
 
-    const tick = () => {
+    const step = () => {
       if (!trainingRef.current) return;
 
-      if (currentEpoch >= targetEpochs) {
+      if (epochRef.current >= targetEpochs) {
         setIsTraining(false);
         return;
       }
 
-      runEpoch(currentEpoch);
-      setCurrentEpoch((prev) => prev + 1);
+      const nextEpoch = epochRef.current + 1;
+      epochRef.current = nextEpoch;
+      setCurrentEpoch(nextEpoch);
+      runEpoch(nextEpoch);
 
-      const delay = speed === 'slow' ? 350 : speed === 'normal' ? 70 : 10;
-      timeoutId = setTimeout(tick, delay);
+      const delay = speed === 'slow' ? 400 : speed === 'normal' ? 120 : 35;
+      timeoutId = setTimeout(step, delay);
     };
 
-    if (isTraining) {
-      tick();
-    }
+    const delay = speed === 'slow' ? 400 : speed === 'normal' ? 120 : 35;
+    timeoutId = setTimeout(step, delay);
 
     return () => clearTimeout(timeoutId);
-  }, [isTraining, currentEpoch, targetEpochs, speed]);
+  }, [isTraining, targetEpochs, speed]);
 
   const handleReset = () => {
     setIsTraining(false);
+    epochRef.current = 1;
     setCurrentEpoch(1);
     setLossHistory([]);
     setLastStepInfo(null);
@@ -290,7 +297,7 @@ export const TrainingDashboard: React.FC<TrainingDashboardProps> = ({
               <span>Click "Start Training" or "Epoch +1" to observe real gradient descent convergence.</span>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height={240}>
               <AreaChart data={lossHistory} margin={{ top: 10, right: 20, bottom: 5, left: 0 }}>
                 <defs>
                   <linearGradient id="lossAreaGrad" x1="0" y1="0" x2="0" y2="1">
